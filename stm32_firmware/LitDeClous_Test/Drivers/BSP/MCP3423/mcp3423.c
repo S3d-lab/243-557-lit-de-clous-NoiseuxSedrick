@@ -118,7 +118,7 @@ uint32_t MCP3423_GetConversionTimeout(
             return 100U;
 
         case MCP3423_RESOLUTION_18BIT:
-            return 350U;
+            return 500U;
 
         default:
             return 0U;

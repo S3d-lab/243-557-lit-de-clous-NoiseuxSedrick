@@ -25,6 +25,7 @@
 #include "usbd_cdc_if.h"
 #include <string.h>
 #include "command_handler.h"
+#include "capture.h"
 #include "tca6416a.h"
 #include "clickboard_io_mux.h"
 #include "mcp3423.h"
@@ -54,7 +55,7 @@ I2S_HandleTypeDef hi2s3;
 
 SPI_HandleTypeDef hspi1;
 
-TIM_HandleTypeDef htim3;
+TIM_HandleTypeDef htim2;
 
 /* USER CODE BEGIN PV */
 uint8_t rx_buffer[64];
@@ -79,7 +80,7 @@ static void MX_I2C1_Init(void);
 static void MX_I2S3_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_I2C3_Init(void);
-static void MX_TIM3_Init(void);
+static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -100,23 +101,23 @@ HAL_StatusTypeDef PWM_SetFrequency(uint32_t frequency)
     uint32_t prescaler = (timer_clock / timer_tick) - 1;
     uint32_t period = (timer_tick / frequency) - 1;
 
-    uint32_t old_period = __HAL_TIM_GET_AUTORELOAD(&htim3);
-    uint32_t old_pulse = __HAL_TIM_GET_COMPARE(&htim3, TIM_CHANNEL_4);
+    uint32_t old_period = __HAL_TIM_GET_AUTORELOAD(&htim2);
+    uint32_t old_pulse = __HAL_TIM_GET_COMPARE(&htim2, TIM_CHANNEL_2);
 
     uint32_t new_pulse =
         (uint32_t)(((uint64_t)old_pulse * (period + 1)) /
                    (old_period + 1));
 
-    __HAL_TIM_DISABLE(&htim3);
+    __HAL_TIM_DISABLE(&htim2);
 
-    __HAL_TIM_SET_PRESCALER(&htim3, prescaler);
-    __HAL_TIM_SET_AUTORELOAD(&htim3, period);
-    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, new_pulse);
-    __HAL_TIM_SET_COUNTER(&htim3, 0);
+    __HAL_TIM_SET_PRESCALER(&htim2, prescaler);
+    __HAL_TIM_SET_AUTORELOAD(&htim2, period);
+    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, new_pulse);
+    __HAL_TIM_SET_COUNTER(&htim2, 0);
 
-    HAL_TIM_GenerateEvent(&htim3, TIM_EVENTSOURCE_UPDATE);
+    HAL_TIM_GenerateEvent(&htim2, TIM_EVENTSOURCE_UPDATE);
 
-    __HAL_TIM_ENABLE(&htim3);
+    __HAL_TIM_ENABLE(&htim2);
 
     return HAL_OK;
 }
@@ -158,79 +159,30 @@ int main(void)
   MX_SPI1_Init();
   MX_USB_DEVICE_Init();
   MX_I2C3_Init();
-  MX_TIM3_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
-  // Initialiser le TCA6416A de la carte ADC (I2C1)
-  if (TCA6416A_Init(&tca_adc, &hi2c1, TCA6416A_ADDR_ADC) == HAL_OK)
-  {
-      // LED verte : carte ADC détectée
+  /* Carte ADC: MikroBUS 1 / I2C3. Carte PWM: MikroBUS 2 / I2C1.
+   * Aucun stimulus au demarrage: mux desactives, GPIO en entree. */
+  if (TCA6416A_Init(&tca_adc, &hi2c3, TCA6416A_ADDR_ADC) == HAL_OK)
       HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_SET);
-  }
-
-  // Associer le TCA6416A au multiplexeur ADC
   clickboard_adc.tca = tca_adc;
-
-  // Désactiver le multiplexeur avant la configuration
-  TCA6416A_WritePin(&clickboard_adc.tca, 11, 1);
-
-  // Configurer P1.0 à P1.3 comme sorties
-  for (uint8_t pin = 8; pin <= 11; pin++)
-  {
-      TCA6416A_PinMode(&clickboard_adc.tca, pin, TCA6416A_OUTPUT);
-  }
-
-  // Laisser le TMUX1308 désactivé
+  TCA6416A_WritePin(&tca_adc, 11, 1);
+  for (uint8_t pin=8; pin<=11; ++pin)
+      TCA6416A_PinMode(&tca_adc, pin, TCA6416A_OUTPUT);
   ClickBoard_DisableMux(&clickboard_adc);
-
-
-  // Initialiser la carte PWM (I2C3)
-  if (ClickBoard_InitPWM(&clickboard_pwm, &hi2c3) == HAL_OK)
-  {
-      // LED orange : carte PWM initialisée
+  if (ClickBoard_InitPWM(&clickboard_pwm, &hi2c1) == HAL_OK)
       HAL_GPIO_WritePin(GPIOD, GPIO_PIN_13, GPIO_PIN_SET);
-
-      // Sélectionner S7 et activer le TMUX1308
-      if (ClickBoard_SelectChannel(&clickboard_pwm, 7) == HAL_OK)
-      {
-          // Démarrer le PWM sur PB1 (TIM3_CH4)
-          HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
-
-          // Désactiver le multiplexeur
-          //ClickBoard_DisableMux(&clickboard_pwm);
-      }
+  for (uint8_t pin=0; pin<8; ++pin) {
+      TCA6416A_PinMode(&clickboard_pwm.tca, pin, TCA6416A_INPUT);
+      TCA6416A_PinMode(&tca_adc, pin, TCA6416A_INPUT);
   }
-
-  uint8_t gpio_state;
-
-  TCA6416A_ReadPort(&clickboard_pwm.tca, 0, &gpio_state);
-
-  // Configurer P0.1 comme sortie
-  if (TCA6416A_PinMode(&clickboard_pwm.tca, 1, TCA6416A_OUTPUT) == HAL_OK)
-  {
-      // Mettre P0.1 à l'état haut (3,3 V)
-      TCA6416A_WritePin(&clickboard_pwm.tca, 1, 1);
-  }
-
-  // Initialiser le MCP3423 de la ClickBoard ADC (I2C1)
-  if (MCP3423_Init(&mcp3423_adc, &hi2c1) == HAL_OK)
-  {
-      if (MCP3423_Configure(
-              &mcp3423_adc,
-              MCP3423_CHANNEL_1,
-			  MCP3423_MODE_ONESHOT,
-              MCP3423_RESOLUTION_18BIT) == HAL_OK)
-      {
-          // LED rouge : MCP3423 initialisé et configuré
-          HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET);
-      }
-  }
-
-  // Attendre la première conversion (12 bits)
-  HAL_Delay(20);
-
-  // Lire la valeur brute du MCP3423
-  adc_status = MCP3423_ReadRaw(&mcp3423_adc, &adc_raw);
+  /* TIM2_CH2, PA1: PWM du connecteur MikroBUS 2. */
+  if (HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2) != HAL_OK) Error_Handler();
+  if (MCP3423_Init(&mcp3423_adc, &hi2c3) == HAL_OK &&
+      MCP3423_Configure(&mcp3423_adc, MCP3423_CHANNEL_1,
+          MCP3423_MODE_ONESHOT, MCP3423_RESOLUTION_12BIT) == HAL_OK)
+      HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET);
 
   /* USER CODE END 2 */
 
@@ -248,27 +200,9 @@ int main(void)
 	      }
 	  }
 
-	  if (tca_pwm_interrupt)
-	  {
-	      tca_pwm_interrupt = 0;
+      Capture_Task();
 
-	      uint8_t gpio_state;
-
-	      if (TCA6416A_ReadPort(&clickboard_pwm.tca, 0, &gpio_state) == HAL_OK)
-	      {
-	          // LED bleue allumée si P0.0 est à 0
-	          if ((gpio_state & 0x01) == 0)
-	          {
-	              HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_SET);
-	          }
-	          else
-	          {
-	              HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_RESET);
-	          }
-	      }
-	  }
-
-	  HAL_Delay(1);
+      HAL_Delay(1);
 
 
     /* USER CODE END WHILE */
@@ -464,61 +398,61 @@ static void MX_SPI1_Init(void)
 }
 
 /**
-  * @brief TIM3 Initialization Function
+  * @brief TIM2 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_TIM3_Init(void)
+static void MX_TIM2_Init(void)
 {
 
-  /* USER CODE BEGIN TIM3_Init 0 */
+  /* USER CODE BEGIN TIM2_Init 0 */
 
-  /* USER CODE END TIM3_Init 0 */
+  /* USER CODE END TIM2_Init 0 */
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
   TIM_OC_InitTypeDef sConfigOC = {0};
 
-  /* USER CODE BEGIN TIM3_Init 1 */
+  /* USER CODE BEGIN TIM2_Init 1 */
 
-  /* USER CODE END TIM3_Init 1 */
-  htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 83;
-  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 999;
-  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 839;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 9999;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
   {
     Error_Handler();
   }
   sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
   {
     Error_Handler();
   }
-  if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
+  if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
   {
     Error_Handler();
   }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
   {
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 500;
+  sConfigOC.Pulse = 0;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
+  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN TIM3_Init 2 */
+  /* USER CODE BEGIN TIM2_Init 2 */
 
-  /* USER CODE END TIM3_Init 2 */
-  HAL_TIM_MspPostInit(&htim3);
+  /* USER CODE END TIM2_Init 2 */
+  HAL_TIM_MspPostInit(&htim2);
 
 }
 

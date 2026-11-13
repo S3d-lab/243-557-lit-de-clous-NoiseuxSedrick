@@ -12,7 +12,6 @@
 #include "tca6416a.h"
 #include "mcp3423.h"
 
-uint8_t CommandHandler_IsResponsePending(void);
 
 typedef struct
 {

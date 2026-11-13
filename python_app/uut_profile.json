@@ -1,0 +1,379 @@
+{
+  "schema": 1,
+  "golden_ac_100hz": false,
+  "adc": {
+    "TP3": {
+      "gain": 2.0,
+      "offset": 0.0,
+      "confirmed": false
+    },
+    "TP4": {
+      "gain": 2.0,
+      "offset": 0.0,
+      "confirmed": false
+    },
+    "TP8": {
+      "gain": 2.0,
+      "offset": 0.0,
+      "confirmed": false
+    },
+    "TP17": {
+      "gain": 2.0,
+      "offset": 0.0,
+      "confirmed": false
+    },
+    "TP29": {
+      "gain": 2.0,
+      "offset": 0.0,
+      "confirmed": false
+    },
+    "TP31": {
+      "gain": 2.0,
+      "offset": 0.0,
+      "confirmed": false
+    },
+    "TP34": {
+      "gain": 2.0,
+      "offset": 0.0,
+      "confirmed": false
+    },
+    "TP35": {
+      "gain": 2.0,
+      "offset": 0.0,
+      "confirmed": false
+    }
+  },
+  "limits": {
+    "ground": {
+      "min": null,
+      "max": null
+    },
+    "vcc": {
+      "min": null,
+      "max": null
+    },
+    "valim_off": {
+      "min": null,
+      "max": null
+    },
+    "valim_on_error": {
+      "min": null,
+      "max": null
+    },
+    "divider_ratio": {
+      "min": null,
+      "max": null
+    },
+    "divider_off": {
+      "min": null,
+      "max": null
+    },
+    "vcc_555": {
+      "min": 4.5,
+      "max": null
+    },
+    "f555": {
+      "min": 8.0,
+      "max": 13.3
+    },
+    "d555": {
+      "min": 40.0,
+      "max": 60.0
+    },
+    "vref_error": {
+      "min": null,
+      "max": null
+    },
+    "filter_dc": {
+      "min": null,
+      "max": null
+    },
+    "a1": {
+      "min": null,
+      "max": null
+    },
+    "a10": {
+      "min": null,
+      "max": null
+    },
+    "a100": {
+      "min": null,
+      "max": null
+    },
+    "amp_dc": {
+      "min": null,
+      "max": null
+    },
+    "gain100": {
+      "min": null,
+      "max": null
+    },
+    "schmitt_vh": {
+      "min": null,
+      "max": null
+    },
+    "schmitt_vl": {
+      "min": null,
+      "max": null
+    },
+    "schmitt_width": {
+      "min": 0.0,
+      "max": null
+    },
+    "schmitt_f": {
+      "min": 0.95,
+      "max": 1.05
+    }
+  },
+  "golden": {
+    "method": "UUT2.3-Golden-stable-5Hz",
+    "enabled": true,
+    "source": "Golden du 6 novembre 2026 : essai de 9 h 14 et diagnostic de 13 h 34 (Québec). Lectures corrigées du diviseur ×2.",
+    "firmware": "UUT 2 TIM2_CH2 PA1 I2C1=20 I2C3=20,68",
+    "source_report": "resultats_uut(3).csv",
+    "source_report_sha256": "5a48adcd4f6729cd939fbd241b741c808f7019106bedef740b28bed6c1be82fa",
+    "source_profile_sha256": "a554b5eed27b99b34f9311a45e1f066fee1aadf0c6492e0484677ac240e89692",
+    "note": "Cibles mesurées fixes du banc. Marges de départ pour mise au point, choisies et modifiables; pas des tolérances déduites des composants. Les gardes de résolution/répétabilité des mesures restent actives.",
+    "adc": {
+      "TP3": {
+        "gain": 2.0,
+        "offset": 0.0
+      },
+      "TP4": {
+        "gain": 2.0,
+        "offset": 0.0
+      },
+      "TP8": {
+        "gain": 2.0,
+        "offset": 0.0
+      },
+      "TP17": {
+        "gain": 2.0,
+        "offset": 0.0
+      },
+      "TP29": {
+        "gain": 2.0,
+        "offset": 0.0
+      },
+      "TP31": {
+        "gain": 2.0,
+        "offset": 0.0
+      },
+      "TP34": {
+        "gain": 2.0,
+        "offset": 0.0
+      },
+      "TP35": {
+        "gain": 2.0,
+        "offset": 0.0
+      }
+    },
+    "checks": [
+      {
+        "section": 1,
+        "key": "ground",
+        "test": "TP17 − TP2",
+        "reference": 0.006,
+        "tolerance": 0.05,
+        "initial_rule": "±10 %, avec un minimum de ±0,020 V"
+      },
+      {
+        "section": 1,
+        "key": "vcc",
+        "test": "VCC : TP8 − TP17",
+        "reference": 3.5360000000000005,
+        "tolerance": 0.3536,
+        "initial_rule": "±10 %, avec un minimum de ±0,020 V"
+      },
+      {
+        "section": 2,
+        "key": "valim_off",
+        "test": "SW1 relâché, STAY_ON=0 : VALIM",
+        "reference": -0.002,
+        "tolerance": 0.02,
+        "initial_rule": "±10 %, avec un minimum de ±0,020 V"
+      },
+      {
+        "section": 2,
+        "key": "valim_on_error",
+        "test": "STAY_ON=1 : VALIM − VCC",
+        "reference": 0.0040000000000000036,
+        "tolerance": 0.02,
+        "initial_rule": "±10 %, avec un minimum de ±0,020 V"
+      },
+      {
+        "section": 2,
+        "key": "valim_on_error",
+        "test": "SW1 enfoncé : VALIM − VCC",
+        "reference": 0.0040000000000000036,
+        "tolerance": 0.02,
+        "initial_rule": "±10 %, avec un minimum de ±0,020 V"
+      },
+      {
+        "section": 2,
+        "key": "valim_on_error",
+        "test": "Maintien après relâchement : VALIM − VCC",
+        "reference": 0.0040000000000000036,
+        "tolerance": 0.02,
+        "initial_rule": "±10 %, avec un minimum de ±0,020 V"
+      },
+      {
+        "section": 2,
+        "key": "valim_off",
+        "test": "Fin du maintien : VALIM",
+        "reference": 0.0,
+        "tolerance": 0.02,
+        "initial_rule": "±10 %, avec un minimum de ±0,020 V"
+      },
+      {
+        "section": 3,
+        "key": "divider_ratio",
+        "test": "TP3 / VALIM",
+        "reference": 0.449740932642487,
+        "tolerance": 0.0449740933,
+        "initial_rule": "±10 % du rapport Golden"
+      },
+      {
+        "section": 3,
+        "key": "divider_off",
+        "test": "Diviseur désactivé",
+        "reference": 0.0,
+        "tolerance": 0.02,
+        "initial_rule": "±10 %, avec un minimum de ±0,020 V"
+      },
+      {
+        "section": 4,
+        "key": "vcc_555",
+        "test": "VCC pendant le 555",
+        "reference": 3.5340000000000003,
+        "tolerance": 0.3534,
+        "initial_rule": "±10 %, avec un minimum de ±0,020 V"
+      },
+      {
+        "section": 5,
+        "key": "vref_error",
+        "test": "Vref − VCC/2",
+        "reference": 0.09866666666666668,
+        "tolerance": 0.02,
+        "initial_rule": "±10 %, avec un minimum de ±0,020 V"
+      },
+      {
+        "section": 5,
+        "key": "filter_dc",
+        "test": "Filtre − Vref, Vs=0",
+        "reference": -1.0966666666666667,
+        "tolerance": 0.109666667,
+        "initial_rule": "±10 %, avec un minimum de ±0,020 V"
+      },
+      {
+        "section": 5,
+        "key": "filter_dc",
+        "test": "Filtre − Vref, Vs au niveau haut",
+        "reference": -1.0586666666666666,
+        "tolerance": 0.105866667,
+        "initial_rule": "±10 %, avec un minimum de ±0,020 V"
+      },
+      {
+        "section": 5,
+        "key": "a1",
+        "test": "Fondamentale filtre à 1 Hz (crête)",
+        "reference": 0.0022241301284732077,
+        "tolerance": 0.000556032532,
+        "initial_rule": "±25 % de la lecture Golden"
+      },
+      {
+        "section": 5,
+        "key": "a10",
+        "test": "Fondamentale filtre à 10 Hz (crête)",
+        "reference": 0.018316398602089494,
+        "tolerance": 0.00457909965,
+        "initial_rule": "±25 % de la lecture Golden"
+      },
+      {
+        "section": 5,
+        "key": "a100",
+        "test": "Fondamentale filtre à 100 Hz (crête)",
+        "reference": 0.010150705846775838,
+        "tolerance": 0.00253767646,
+        "initial_rule": "±25 % de la lecture Golden"
+      },
+      {
+        "section": 6,
+        "key": "vref_error",
+        "test": "Vref − VCC/2",
+        "reference": 0.1279999999999999,
+        "tolerance": 0.02,
+        "initial_rule": "±10 %, avec un minimum de ±0,020 V"
+      },
+      {
+        "section": 6,
+        "key": "filter_dc",
+        "test": "Filtre − Vref en continu",
+        "reference": -1.3673333333333333,
+        "tolerance": 0.136733333,
+        "initial_rule": "±10 %, avec un minimum de ±0,020 V"
+      },
+      {
+        "section": 6,
+        "key": "amp_dc",
+        "test": "Ampli − filtre en continu",
+        "reference": 1.772666666666667,
+        "tolerance": 0.177266667,
+        "initial_rule": "±10 %, avec un minimum de ±0,020 V"
+      },
+      {
+        "section": 6,
+        "key": "gain100",
+        "test": "Gain AC à 100 Hz",
+        "reference": 6.119430963878986,
+        "tolerance": 1.20403566,
+        "initial_rule": "Marge absolue précédente conservée; référence actualisée après stabilisation du canal.",
+        "previous_reference": 6.0201782963864146
+      },
+      {
+        "section": 7,
+        "key": "schmitt_vh",
+        "test": "Seuil haut apparent TP31 à 5 Hz (VH)",
+        "reference": 2.358,
+        "tolerance": null,
+        "initial_rule": "Tolérance à choisir par l’utilisateur; mesure apparente à 5 Hz, pas tension directe de TP34."
+      },
+      {
+        "section": 7,
+        "key": "schmitt_vl",
+        "test": "Seuil bas apparent TP31 à 5 Hz (VL)",
+        "reference": 2.059,
+        "tolerance": null,
+        "initial_rule": "Tolérance à choisir par l’utilisateur; mesure apparente à 5 Hz, pas tension directe de TP34."
+      }
+    ],
+    "stable_diagnostic": {
+      "file": "diagnostic_mesures_20261106_133426.csv",
+      "sha256": "2182ce6c89994590f78a164bc7fd5cfba2ceace5112653342cfe48c6e58441e5",
+      "profile_sha256": "8160e2671cd6b07de23fa0f3eddd77f7d9b769e28bf2e6dc6577dacdec416cea",
+      "gain100": 6.119430963878986,
+      "schmitt_5hz": {
+        "inverted": true,
+        "falling": 29,
+        "rising": 30,
+        "max_window_us": 24424.5,
+        "vh": 2.358,
+        "vh_u": 0.1339999999999999,
+        "vl": 2.059,
+        "vl_u": 0.13300000000000023,
+        "width": 0.29899999999999993,
+        "width_u": 0.2670000000000001
+      },
+      "settle_s": 2,
+      "capture_ms": 6000,
+      "adc_bits": 12,
+      "pwm_duty_percent": 50,
+      "clipping_note": "Aucun plateau résolu de 15 % de période sur TP31 à 5 Hz. Aucune conclusion sur la forme à 100 Hz."
+    },
+    "migration": {
+      "previous_method": "UUT2.2-Golden-TP31-fixe",
+      "previous_gain_reference": 6.0201782963864146,
+      "previous_report_sha256": "5a48adcd4f6729cd939fbd241b741c808f7019106bedef740b28bed6c1be82fa"
+    }
+  }
+}

@@ -7,6 +7,7 @@
 
 
 #include "command_handler.h"
+#include "capture.h"
 #include "main.h"
 #include "usbd_cdc_if.h"
 #include "usb_device.h"
@@ -19,7 +20,7 @@
 
 extern USBD_HandleTypeDef hUsbDeviceFS;
 extern ClickBoard_HandleTypeDef clickboard_pwm;
-extern TIM_HandleTypeDef htim3;
+extern TIM_HandleTypeDef htim2;
 extern TCA6416A_HandleTypeDef tca_adc;
 extern MCP3423_HandleTypeDef mcp3423_adc;
 extern ClickBoard_HandleTypeDef clickboard_adc;
@@ -27,71 +28,6 @@ extern ClickBoard_HandleTypeDef clickboard_adc;
 static uint8_t usb_tx_buffer[64];
 static char pending_response[64];
 static uint8_t response_pending = 0;
-
-// Le tableau occupera 4 000 octets de RAM.
-#define ADC_CAPTURE_MAX_SAMPLES 1000U					// fixe la capacité maximale du tampon.
-
-static int32_t adc_samples[ADC_CAPTURE_MAX_SAMPLES];	// conserve les valeurs brutes retournées par le MCP3423.
-static uint16_t adc_sample_count = 0;					// indique combien d'échantillons ont été acquis.
-
-static uint32_t adc_timestamps[ADC_CAPTURE_MAX_SAMPLES]; // Ce tableau conservera le temps de chaque lecture,
-															//en millisecondes depuis le début de l'acquisition.
-
-
-static HAL_StatusTypeDef ADC_Capture(uint32_t duration_ms)
-{
-    HAL_StatusTypeDef status;
-    uint32_t start;
-    int32_t raw;
-
-    adc_sample_count = 0;
-
-    status = MCP3423_Configure(
-        &mcp3423_adc,
-        MCP3423_CHANNEL_1,
-        MCP3423_MODE_CONTINUOUS,
-        MCP3423_RESOLUTION_12BIT
-    );
-
-    if (status != HAL_OK)
-        return status;
-
-    start = HAL_GetTick();
-
-    while ((HAL_GetTick() - start) < duration_ms &&
-           adc_sample_count < ADC_CAPTURE_MAX_SAMPLES)
-    {
-        status = MCP3423_ReadRaw(&mcp3423_adc, &raw);
-
-        if (status == HAL_OK)
-        {
-        	adc_samples[adc_sample_count] = raw;
-			adc_timestamps[adc_sample_count] = HAL_GetTick() - start;
-			adc_sample_count++;
-        }
-        else if (status != HAL_BUSY)
-        {
-            break;
-        }
-
-        HAL_Delay(1);
-    }
-
-    /* Restaurer le mode one-shot */
-    HAL_StatusTypeDef restore_status = MCP3423_Configure(
-        &mcp3423_adc,
-        MCP3423_CHANNEL_1,
-        MCP3423_MODE_ONESHOT,
-        MCP3423_RESOLUTION_12BIT
-    );
-
-    if (status != HAL_OK && status != HAL_BUSY)
-        return status;
-
-    return restore_status;
-}
-
-
 
 uint8_t CommandHandler_IsResponsePending(void)
 {
@@ -170,10 +106,10 @@ static const char *HandlePWM(const uint8_t *command, uint32_t length)
         if (duty > 100)
             return "ERROR\r\n";
 
-        uint32_t period = __HAL_TIM_GET_AUTORELOAD(&htim3) + 1;
+        uint32_t period = __HAL_TIM_GET_AUTORELOAD(&htim2) + 1;
         uint32_t pulse = (period * duty) / 100;
 
-        __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, pulse);
+        __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, pulse);
 
         return "OK\r\n";
     }
@@ -356,100 +292,52 @@ static const char *HandleADC(const uint8_t *command, uint32_t length)
         return "ERROR\r\n";
     }
 
-    if (length == 16 &&
-        memcmp(command, "ADC CAPTURE 3000", 16) == 0)
-    {
-        HAL_StatusTypeDef status = ADC_Capture(3000);
-
-        if (status != HAL_OK)
-            return "ERROR\r\n";
-
-        snprintf(adc_response, sizeof(adc_response),
-                 "SAMPLES %u\r\n", (unsigned int)adc_sample_count);
-
-        return adc_response;
-    }
-
-    if (length >= 12 &&
-        memcmp(command, "ADC SAMPLE ", 11) == 0)
-    {
-        uint32_t index = 0;
-
-        for (uint32_t i = 11; i < length; i++)
-        {
-            if (command[i] < '0' || command[i] > '9')
-                return "ERROR\r\n";
-
-            index = index * 10 + (command[i] - '0');
-
-            if (index >= ADC_CAPTURE_MAX_SAMPLES)
-                return "ERROR\r\n";
-        }
-
-        if (index >= adc_sample_count)
-            return "ERROR\r\n";
-
-        snprintf(adc_response, sizeof(adc_response),
-                 "%lu,%ld\r\n",
-                 (unsigned long)adc_timestamps[index],
-                 (long)adc_samples[index]);
-
-        return adc_response;
-    }
-
-    if (length >= 11 &&
-        length <= 14 &&
-        memcmp(command, "ADC BLOCK ", 10) == 0)
-    {
-        uint32_t start_index = 0;
-
-        for (uint32_t i = 10; i < length; i++)
-        {
-            if (command[i] < '0' || command[i] > '9')
-                return "ERROR\r\n";
-
-            start_index = start_index * 10 + (command[i] - '0');
-        }
-
-        if (start_index >= adc_sample_count)
-            return "ERROR\r\n";
-
-        size_t used = 0;
-        adc_response[0] = '\0';
-
-        for (uint32_t i = start_index;
-             i < adc_sample_count && i < start_index + 4;
-             i++)
-        {
-            int written = snprintf(
-                adc_response + used,
-                sizeof(adc_response) - used,
-                "%lu,%ld;",
-                (unsigned long)adc_timestamps[i],
-                (long)adc_samples[i]
-            );
-
-            if (written < 0 ||
-                (size_t)written >= sizeof(adc_response) - used)
-                return "ERROR\r\n";
-
-            used += (size_t)written;
-        }
-
-        if (used + 2 >= sizeof(adc_response))
-            return "ERROR\r\n";
-
-        adc_response[used++] = '\r';
-        adc_response[used++] = '\n';
-        adc_response[used] = '\0';
-
-        return adc_response;
-    }
-
+    /* Acquisition remplacee par CAP START / STATUS / BLOCK (non bloquant). */
     return "ERROR\r\n";
 }
 
 
+
+/* STOP fait toutes les tentatives, meme si un peripherique ne repond pas.
+ * Le bit 0 signale la restauration ADC, 1 le mux PWM, 2..5 les GPIO,
+ * 6 le mux ADC. L'alimentation externe n'est PAS commandee ici. */
+static const char *StopOutputs(void)
+{
+    static char response[64];
+    unsigned failures = 0;
+    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 0);
+    if (Capture_Abort() != HAL_OK) failures |= 1U;
+    if (ClickBoard_DisableMux(&clickboard_pwm) != HAL_OK) failures |= 2U;
+    if (TCA6416A_WritePin(&clickboard_pwm.tca,3,0) != HAL_OK) failures |= 4U;
+    if (TCA6416A_WritePin(&clickboard_pwm.tca,4,0) != HAL_OK) failures |= 8U;
+    if (TCA6416A_PinMode(&clickboard_pwm.tca,3,TCA6416A_INPUT) != HAL_OK) failures |= 16U;
+    if (TCA6416A_PinMode(&clickboard_pwm.tca,4,TCA6416A_INPUT) != HAL_OK) failures |= 32U;
+    if (ClickBoard_DisableMux(&clickboard_adc) != HAL_OK) failures |= 64U;
+    if (failures) snprintf(response,sizeof(response),"ERROR STOP %u\r\n",failures);
+    else snprintf(response,sizeof(response),"STOPPED\r\n");
+    return response;
+}
+static const char *HandleCapture(const uint8_t *command, uint32_t length)
+{
+    static char response[64];
+    char text[64], extra;
+    unsigned a,b,p,ms,index;
+    if (length >= sizeof(text)) return "ERROR\r\n";
+    memcpy(text,command,length); text[length]=0;
+    if (!strcmp(text,"CAP STATUS")) {
+        Capture_Status(response,sizeof(response)); return response;
+    }
+    if (sscanf(text,"CAP BLOCK %u %c",&index,&extra)==1) {
+        Capture_Block(index,response,sizeof(response)); return response;
+    }
+    if (sscanf(text,"CAP START ADC %u %u %c",&a,&ms,&extra)==2 && a<=7)
+        return Capture_Start("ADC",a,0,0,ms)==HAL_OK ? "OK\r\n":"ERROR\r\n";
+    if (sscanf(text,"CAP START GPIO %u %u %c",&p,&ms,&extra)==2 && p<=7)
+        return Capture_Start("GPIO",0,0,p,ms)==HAL_OK ? "OK\r\n":"ERROR\r\n";
+    if (sscanf(text,"CAP START SYNC %u %u %u %u %c",&a,&b,&p,&ms,&extra)==4 && a<=7 && b<=7 && p<=7)
+        return Capture_Start("SYNC",a,b,p,ms)==HAL_OK ? "OK\r\n":"ERROR\r\n";
+    return "ERROR\r\n";
+}
 
 void CommandHandler_Process(const uint8_t *command, uint32_t length)
 {
@@ -458,6 +346,35 @@ void CommandHandler_Process(const uint8_t *command, uint32_t length)
     if (length == 4 && memcmp(command, "PING", 4) == 0)
     {
         response = "PONG\r\n";
+    }
+    else if (length == 4 && memcmp(command,"INFO",4)==0)
+        response = "UUT 2 TIM2_CH2 PA1 I2C1=20 I2C3=20,68\r\n";
+    else if (length == 4 && memcmp(command,"STOP",4)==0)
+        response = StopOutputs();
+    else if (length >= 4 && memcmp(command,"CAP ",4)==0)
+        response = HandleCapture(command,length);
+    else if (Capture_IsBusy())
+        response = "BUSY\r\n";
+    else if (length == 11 && memcmp(command,"PWM DISABLE",11)==0)
+        response = ClickBoard_DisableMux(&clickboard_pwm)==HAL_OK ? "OK\r\n":"ERROR\r\n";
+    else if (length >= 10 && memcmp(command,"I2C PROBE ",10)==0) {
+        extern I2C_HandleTypeDef hi2c1, hi2c3;
+        char text[64], extra; unsigned bus, address;
+        static char result[64];
+        if (length>=sizeof(text)) response="ERROR\r\n";
+        else {
+            memcpy(text,command,length);text[length]=0;
+            if (sscanf(text,"I2C PROBE %u %u %c",&bus,&address,&extra)!=2 ||
+                (bus!=1 && bus!=3) || address<8 || address>119) response="ERROR\r\n";
+            else {
+                I2C_HandleTypeDef *i2c = bus==1 ? &hi2c1 : &hi2c3;
+                HAL_StatusTypeDef status=HAL_I2C_IsDeviceReady(i2c,address<<1,1,20);
+                uint32_t err=HAL_I2C_GetError(i2c);
+                if (status==HAL_OK) response="ACK\r\n";
+                else if (status==HAL_ERROR && (err==HAL_I2C_ERROR_NONE || err==HAL_I2C_ERROR_AF)) response="NACK\r\n";
+                else { snprintf(result,sizeof(result),"BUS_ERROR S=%u E=0x%08lX\r\n",status,(unsigned long)err);response=result; }
+            }
+        }
     }
     else if (length == 6 && memcmp(command, "LED ON", 6) == 0)
     {

@@ -12,5 +12,6 @@
 
 void CommandHandler_Process(const uint8_t *command, uint32_t length);
 void CommandHandler_Task(void);
+uint8_t CommandHandler_IsResponsePending(void);
 
 #endif /* INC_COMMAND_HANDLER_H_ */

@@ -1,97 +1,40 @@
-from PyQt6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QScrollArea,
-)
-
+from PyQt6.QtWidgets import QWidget,QVBoxLayout,QScrollArea,QComboBox,QLabel
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 
-
 class GraphsWindow(QWidget):
-    """Fenêtre affichant les signaux mesurés."""
-
     def __init__(self):
         super().__init__()
-
-        self.setWindowTitle("Lit de clous - Signaux mesurés")
-        self.resize(1100, 900)
-
+        self.setWindowTitle('Acquisitions du banc'); self.resize(1100,650)
         layout = QVBoxLayout(self)
+        self.choice = QComboBox(); layout.addWidget(self.choice)
+        self.note = QLabel(); self.note.setWordWrap(True); layout.addWidget(self.note)
+        self.figure = Figure(figsize=(10,5)); self.canvas = FigureCanvasQTAgg(self.figure)
+        layout.addWidget(self.canvas)
+        self.waves = []; self.choice.currentIndexChanged.connect(self.draw)
 
-        # Zone défilante
-        self.scroll_area = QScrollArea()
-        self.scroll_area.setWidgetResizable(True)
+    def add_wave(self,wave):
+        self.waves.append(wave)
+        self.choice.addItem(f"Section {wave['section']} — {wave['tp']} — {wave.get('frequency') or 'DC / logique'} Hz — acquisition {len(self.waves)}")
+        self.choice.setCurrentIndex(len(self.waves)-1)
 
-        self.graphs_container = QWidget()
-        self.graphs_layout = QVBoxLayout(self.graphs_container)
-        self.graphs_layout.setSpacing(15)
-        self.graphs_layout.setContentsMargins(10, 10, 10, 10)
-        self.graphs_layout.addStretch()
-
-        self.scroll_area.setWidget(self.graphs_container)
-        layout.addWidget(self.scroll_area)
-
-        # Dictionnaire des graphiques par fréquence
-        self.graphs = {}
-
-    def plot_signal(self, frequency: int, time: list, voltage: list):
-        """Affiche ou met à jour le graphique d'une fréquence."""
-
-        if frequency not in self.graphs:
-
-            figure = Figure(figsize=(10, 2.5))
-            canvas = FigureCanvasQTAgg(figure)
-            ax = figure.add_subplot(111)
-
-            canvas.setFixedHeight(280)
-
-            self.graphs[frequency] = {
-                "figure": figure,
-                "canvas": canvas,
-                "ax": ax,
-            }
-
-            # Insérer le graphique en ordre croissant
-            position = sum(
-                existing_frequency < frequency
-                for existing_frequency in self.graphs
-            )
-
-            self.graphs_layout.insertWidget(position, canvas)
-
-        graph = self.graphs[frequency]
-        ax = graph["ax"]
-
-        ax.clear()
-
-        ax.plot(
-            time,
-            voltage,
-            marker=".",
-            markersize=4,
-            linewidth=1
-        )
-
-        # Afficher cinq périodes
-        display_duration = 5 / frequency
-        ax.set_xlim(0, display_duration)
-
-        ax.set_title(f"Signal à {frequency} Hz")
-        ax.set_ylabel("Tension (V)")
-        ax.set_xlabel("Temps (s)")
-        ax.grid(True)
-
-        graph["figure"].tight_layout()
-        graph["canvas"].draw_idle()
+    def draw(self,index):
+        if not 0 <= index < len(self.waves): return
+        wave = self.waves[index]; self.figure.clear(); ax=self.figure.add_subplot(111)
+        times,values=wave['time'],wave['voltage']
+        if len(times)==len(values) and values:
+            if wave.get('digital'):
+                ax.step(times,values,where='post'); ax.set_ylabel('Niveau logique')
+            else:
+                ax.plot(times,values,'.-',markersize=3)
+                ax.set_ylabel('Lecture comparée à la Golden (V)' if wave.get('golden_comparison') else
+                              'Tension (V)' if wave['calibrated'] else 'Valeur provisoire (V), gain à confirmer')
+            ax.set_xlim(min(times),max(times))
+        else:
+            ax.text(.5,.5,'Conversion non exploitable. Codes bruts conservés dans l’export.',ha='center',transform=ax.transAxes)
+        ax.set_xlabel('Temps STM32 (s)'); ax.grid(True)
+        self.note.setText('Les points ADC sont successifs. À 100 Hz, le contrôle d’écrêtage dépend de la cadence réellement mesurée. Les instants GPIO sont détectés par polling I2C.')
+        self.figure.tight_layout(); self.canvas.draw_idle()
 
     def clear_graphs(self):
-        """Supprime tous les graphiques."""
-
-        for graph in self.graphs.values():
-            canvas = graph["canvas"]
-            self.graphs_layout.removeWidget(canvas)
-            canvas.deleteLater()
-            graph["figure"].clear()
-
-        self.graphs.clear()
+        self.choice.clear(); self.waves.clear(); self.figure.clear(); self.canvas.draw_idle()
